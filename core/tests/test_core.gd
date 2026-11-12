@@ -32,14 +32,13 @@ func _init() -> void:
 	
 	# --- Teste do Bug Silencioso (Tubo Cheio e Misturado) ---
 	var tubo_misturado = TubeClass.new()
-	# Forçando o estado diretamente (bypass na regra) para testar o is_completo
-	tubo_misturado.cores = [1, 2, 1, 2] 
+	tubo_misturado.cores = [1, 2, 1, 2] as Array[int]
 	ok(tubo_misturado.is_cheio() == true, "Tubo misturado deve estar CHEIO")
 	ok(tubo_misturado.is_completo() == false, "Tubo misturado NÃO deve estar COMPLETO")
 	
 	# --- Teste de Remoção e Contagem de Topo ---
 	var tubo_teste = TubeClass.new()
-	tubo_teste.cores = [7, 7, 8] # Forçando o estado
+	tubo_teste.cores = [7, 7, 8] as Array[int]
 	ok(tubo_teste.contar_topo_igual() == 1, "Deve haver 1 bloco de cor 8 no topo")
 	ok(tubo_teste.remover_topo() == 8, "Remover topo deve retornar a cor 8")
 	ok(tubo_teste.contar_topo_igual() == 2, "Agora deve haver 2 blocos de cor 7 no topo")
