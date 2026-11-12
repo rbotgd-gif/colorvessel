@@ -1,6 +1,5 @@
 extends SceneTree
 
-# Correção do auditor: evita falha de class_name no headless
 const TubeClass = preload("res://core/src/tube.gd")
 
 var falhas := 0
@@ -24,7 +23,7 @@ func _init() -> void:
 	ok(tubo.adicionar_cor(-1) == false, "Tubo deve recusar cor inválida (-1)")
 	ok(tubo.adicionar_cor(2) == false, "Tubo deve recusar cor diferente")
 	
-	# --- Teste de Capacidade Diferente (Auditoria) ---
+	# --- Teste de Capacidade Diferente ---
 	var tubo_curto = TubeClass.new(2)
 	ok(tubo_curto.adicionar_cor(5) == true, "Tubo cap 2 aceita cor 5")
 	ok(tubo_curto.is_completo() == false, "Tubo cap 2 com 1 bloco não está completo")
@@ -33,18 +32,14 @@ func _init() -> void:
 	
 	# --- Teste do Bug Silencioso (Tubo Cheio e Misturado) ---
 	var tubo_misturado = TubeClass.new()
-	tubo_misturado.adicionar_cor(1)
-	tubo_misturado.adicionar_cor(2)
-	tubo_misturado.adicionar_cor(1)
-	tubo_misturado.adicionar_cor(2)
+	# Forçando o estado diretamente (bypass na regra) para testar o is_completo
+	tubo_misturado.cores = [1, 2, 1, 2] 
 	ok(tubo_misturado.is_cheio() == true, "Tubo misturado deve estar CHEIO")
 	ok(tubo_misturado.is_completo() == false, "Tubo misturado NÃO deve estar COMPLETO")
 	
 	# --- Teste de Remoção e Contagem de Topo ---
 	var tubo_teste = TubeClass.new()
-	tubo_teste.adicionar_cor(7)
-	tubo_teste.adicionar_cor(7)
-	tubo_teste.adicionar_cor(8)
+	tubo_teste.cores = [7, 7, 8] # Forçando o estado
 	ok(tubo_teste.contar_topo_igual() == 1, "Deve haver 1 bloco de cor 8 no topo")
 	ok(tubo_teste.remover_topo() == 8, "Remover topo deve retornar a cor 8")
 	ok(tubo_teste.contar_topo_igual() == 2, "Agora deve haver 2 blocos de cor 7 no topo")
