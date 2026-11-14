@@ -1,14 +1,17 @@
 extends Node2D
 # Visual (Arte Funcional): monta o Tabuleiro com sprites (assets do D1) e repassa intenções.
 # Não decide regra: quem diz se a jogada vale é tabuleiro.mover_liquido().
-# Estado próprio do Visual é só de UI: tubo selecionado, calor do fundo, relógio da gelatina.
+# Estado próprio do Visual é só de UI: tubo selecionado, calor do fundo, relógio da gelatina
+# e a fase atual (progressão: quantas cores pedir ao Core; vitória quem diz é o Core).
 
 const TabuleiroClass = preload("res://core/src/tabuleiro.gd")
 const TEX_FUNDO: Texture2D = preload("res://visual/assets/fundo_geladeira.jpg")
 const TEX_TUBO_BRUTA: Texture2D = preload("res://visual/assets/tubo_vidro.png")
 const TEX_BLOCO_BRUTA: Texture2D = preload("res://visual/assets/bloco_gelatina.png")
 
-const QTD_CORES: int = 3
+const FASE_INICIAL: int = 1
+const CORES_FASE_INICIAL: int = 2  # Fase 1 = 2 cores; cada fase soma 1
+const MAX_CORES: int = 6           # teto: da Fase 5 em diante são sempre 6 cores
 const SEM_SELECAO: int = -1
 
 const LARGURA_TUBO: float = 60.0
@@ -30,6 +33,12 @@ const COR_FUNDO_QUENTE := Color("#FFB077")     # filtro laranja multiplicado ao 
 const COR_BORDA_SELECAO := Color("#FFC300")
 const COR_TEXTO := Color("#0F172A")
 const COR_DESCONHECIDA := Color("#8D99AE")
+# Parecer de arte: "Fase: X" no topo; status/vitória mais abaixo para não colidir.
+const Y_TEXTO_FASE: float = 40.0
+const Y_TEXTO_STATUS: float = 90.0
+const TAM_FONTE_FASE: int = 32
+const TAM_FONTE_STATUS: int = 24
+const TAM_BOTAO := Vector2(200, 44)
 const DURACAO_CALOR: float = 0.35  # segundos para o fundo esquentar/esfriar
 const SQUASH_AMPLITUDE: float = 0.08
 const SQUASH_VELOCIDADE: float = 9.0
@@ -49,6 +58,8 @@ const CORES: Dictionary = {
 
 var tabuleiro: Tabuleiro
 var selecionado: int = SEM_SELECAO
+var fase: int = FASE_INICIAL
+var botao_proxima: Button
 var calor: float = 0.0  # 0 = frio, 1 = quente; animado por tween (só UI)
 var tempo: float = 0.0  # relógio da animação de gelatina
 var _tween_calor: Tween
@@ -74,9 +85,15 @@ func _ready() -> void:
 	camada = Node2D.new()
 	camada.show_behind_parent = true
 	add_child(camada)
+	botao_proxima = Button.new()
+	botao_proxima.text = "Próxima Fase"
+	botao_proxima.size = TAM_BOTAO
+	botao_proxima.position = Vector2((get_viewport_rect().size.x - TAM_BOTAO.x) / 2.0,
+		Y_TEXTO_STATUS + 20.0)
+	botao_proxima.pressed.connect(proxima_fase)
+	add_child(botao_proxima)
 	tabuleiro = TabuleiroClass.new()
-	tabuleiro.gerar_novo_jogo(QTD_CORES)
-	montar()
+	iniciar_fase(FASE_INICIAL)
 
 func _process(delta: float) -> void:
 	tempo += delta
@@ -91,6 +108,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		clicar_tubo(indice_tubo_em(local.position))
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		reiniciar()
+	elif event is InputEventKey and event.pressed and event.keycode in [KEY_N, KEY_ENTER]:
+		proxima_fase()
 
 # Intenção do jogador. 1º clique seleciona; 2º clique pede ao Core para verter.
 # Inválida -> só desmarca (Visual não assume sucesso). Sempre remonta a partir do Core.
@@ -105,10 +124,25 @@ func clicar_tubo(idx: int) -> void:
 		tabuleiro.mover_liquido(origem, idx)
 	montar()
 
-func reiniciar() -> void:
+# --- Progressão de fases ---
+
+static func cores_da_fase(f: int) -> int:
+	return mini(CORES_FASE_INICIAL + f - FASE_INICIAL, MAX_CORES)
+
+func iniciar_fase(f: int) -> void:
+	fase = f
 	_selecionar(SEM_SELECAO)
-	tabuleiro.gerar_novo_jogo(QTD_CORES)
+	tabuleiro.gerar_novo_jogo(cores_da_fase(fase))
 	montar()
+
+# R: refaz a fase ATUAL (novo embaralhamento, mesma quantidade de cores).
+func reiniciar() -> void:
+	iniciar_fase(fase)
+
+# Só avança se o Core disser que é vitória.
+func proxima_fase() -> void:
+	if tabuleiro.is_vitoria():
+		iniciar_fase(fase + 1)
 
 # Troca a seleção e anima o fundo térmico até o calor-alvo.
 func _selecionar(idx: int) -> void:
@@ -163,6 +197,8 @@ func montar() -> void:
 			linha.append(b)
 		sprites_blocos.append(linha)
 		sprites_tubos.append(_sprite(tex_tubo, r))  # vidro por cima dos blocos
+	if botao_proxima:
+		botao_proxima.visible = tabuleiro.is_vitoria()
 	queue_redraw()
 
 # Sprite com origem no centro-base: o squash "senta" no bloco de baixo.
@@ -230,6 +266,9 @@ func _draw() -> void:
 	if selecionado != SEM_SELECAO:
 		draw_rect(rect_tubo(selecionado), COR_BORDA_SELECAO, false, BORDA_SELECAO)
 	var fonte: Font = ThemeDB.fallback_font
-	var texto: String = "Vitória! (R para novo jogo)" if tabuleiro.is_vitoria() else "R: novo jogo"
-	draw_string(fonte, Vector2(0, 60), texto, HORIZONTAL_ALIGNMENT_CENTER,
-		get_viewport_rect().size.x, 28, COR_TEXTO)
+	var largura: float = get_viewport_rect().size.x
+	draw_string(fonte, Vector2(0, Y_TEXTO_FASE), "Fase: %d" % fase,
+		HORIZONTAL_ALIGNMENT_CENTER, largura, TAM_FONTE_FASE, COR_TEXTO)
+	var texto: String = "Vitória! (N/Enter: próxima fase)" if tabuleiro.is_vitoria() 		else "R: reiniciar fase"
+	draw_string(fonte, Vector2(0, Y_TEXTO_STATUS), texto, HORIZONTAL_ALIGNMENT_CENTER,
+		largura, TAM_FONTE_STATUS, COR_TEXTO)
