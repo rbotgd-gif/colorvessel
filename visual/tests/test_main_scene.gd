@@ -45,6 +45,30 @@ func _initialize() -> void:
 	ok(main.tabuleiro.tubos.size() == 5, "gerar_novo_jogo(3) gera 5 tubos")
 	ok(main.selecionado == main.SEM_SELECAO, "Começa sem seleção")
 
+	# --- Assets de arte (Etapa 8): nós de imagem existem e têm textura ---
+	ok(main.fundo is TextureRect and main.fundo.texture != null, "Fundo da geladeira carregado")
+	ok(main.tex_tubo != null and main.tex_bloco != null, "Texturas de tubo e bloco geradas")
+	ok(main.sprites_tubos.size() == 5, "Um Sprite2D de vidro por tubo")
+	var tubos_ok := true
+	for s in main.sprites_tubos:
+		tubos_ok = tubos_ok and s != null and s.texture == main.tex_tubo
+	ok(tubos_ok, "Sprites de tubo não nulos e com textura")
+	var total := 0
+	var blocos_ok := true
+	for i in main.tabuleiro.tubos.size():
+		var cores: Array = main.tabuleiro.tubos[i].cores
+		total += cores.size()
+		for j in cores.size():
+			var b: Sprite2D = main.sprites_blocos[i][j]
+			blocos_ok = blocos_ok and b.texture == main.tex_bloco \
+				and b.modulate == main.cor_visual(cores[j])
+	ok(total == 12 and blocos_ok, "12 blocos com textura e cor (modulate) da paleta")
+	for t in [main.tex_tubo, main.tex_bloco]:
+		var img: Image = t.get_image()
+		var canto: float = img.get_pixel(0, 0).a
+		var centro: float = img.get_pixel(img.get_width() / 2, img.get_height() / 2).a
+		ok(canto == 0.0 and centro > 0.0, "Chroma key: canto transparente, centro visível")
+
 	# Estado fixo para testar o fluxo de clique sem depender do RNG.
 	var arr: Array[Tube] = [tubo([1, 2]), tubo([]), tubo([3])]
 	main.tabuleiro = TabuleiroClass.new(arr)
@@ -79,7 +103,7 @@ func _initialize() -> void:
 	main.calor = 0.0
 	ok(main.cor_fundo() == main.COR_FUNDO_FRIO, "Sem calor o fundo é o frio")
 	main.calor = 1.0
-	ok(main.cor_fundo() == main.COR_FUNDO_QUENTE, "Com calor máximo o fundo é o quente")
+	ok(main.cor_fundo().is_equal_approx(main.COR_FUNDO_QUENTE), "Com calor máximo o fundo é o quente")
 	main.calor = 0.0
 
 	main.clicar_tubo(0)
