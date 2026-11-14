@@ -20,6 +20,10 @@ func is_vazio() -> bool:
 func is_cheio() -> bool:
 	return cores.size() >= capacidade
 
+# Quantos blocos ainda cabem (nunca negativo, mesmo com estado acima da capacidade).
+func get_espaco_livre() -> int:
+	return maxi(capacidade - cores.size(), 0)
+
 # Só é completo se estiver cheio E todos os blocos forem da mesma cor.
 func is_completo() -> bool:
 	if not is_cheio():
