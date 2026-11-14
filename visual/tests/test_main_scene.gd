@@ -25,6 +25,18 @@ func clique_em(main: Node2D, idx: int) -> void:
 	ev.position = main.rect_tubo(idx).get_center()
 	main._unhandled_input(ev)
 
+func tecla(main: Node2D, codigo: Key) -> void:
+	var ev := InputEventKey.new()
+	ev.keycode = codigo
+	ev.pressed = true
+	main._unhandled_input(ev)
+
+# Troca o tabuleiro por um já resolvido (mantém a fase) e atualiza a UI.
+func vencer(main: Node2D) -> void:
+	var arr: Array[Tube] = [tubo([1, 1, 1, 1]), tubo([])]
+	main.tabuleiro = TabuleiroClass.new(arr)
+	main.montar()
+
 func _initialize() -> void:
 	print("--- Iniciando teste de sanidade da cena principal ---")
 
@@ -42,13 +54,14 @@ func _initialize() -> void:
 	if main.tabuleiro == null:
 		quit(1)  # sem Tabuleiro o resto quebraria e o processo ficaria preso
 		return
-	ok(main.tabuleiro.tubos.size() == 5, "gerar_novo_jogo(3) gera 5 tubos")
+	ok(main.fase == 1, "Jogo começa na Fase 1")
+	ok(main.tabuleiro.tubos.size() == 4, "Fase 1 = 2 cores -> 4 tubos")
 	ok(main.selecionado == main.SEM_SELECAO, "Começa sem seleção")
 
 	# --- Assets de arte (Etapa 8): nós de imagem existem e têm textura ---
 	ok(main.fundo is TextureRect and main.fundo.texture != null, "Fundo da geladeira carregado")
 	ok(main.tex_tubo != null and main.tex_bloco != null, "Texturas de tubo e bloco geradas")
-	ok(main.sprites_tubos.size() == 5, "Um Sprite2D de vidro por tubo")
+	ok(main.sprites_tubos.size() == 4, "Um Sprite2D de vidro por tubo")
 	var tubos_ok := true
 	for s in main.sprites_tubos:
 		tubos_ok = tubos_ok and s != null and s.texture == main.tex_tubo
@@ -62,7 +75,7 @@ func _initialize() -> void:
 			var b: Sprite2D = main.sprites_blocos[i][j]
 			blocos_ok = blocos_ok and b.texture == main.tex_bloco \
 				and b.modulate == main.cor_visual(cores[j])
-	ok(total == 12 and blocos_ok, "12 blocos com textura e cor (modulate) da paleta")
+	ok(total == 8 and blocos_ok, "8 blocos com textura e cor (modulate) da paleta")
 	for t in [main.tex_tubo, main.tex_bloco]:
 		var img: Image = t.get_image()
 		var canto: float = img.get_pixel(0, 0).a
@@ -119,8 +132,30 @@ func _initialize() -> void:
 	await create_timer(main.DURACAO_CALOR + 0.15).timeout
 	ok(is_equal_approx(main.calor, 0.0), "Tween devolve o fundo ao frio")
 
-	main.reiniciar()
-	ok(main.tabuleiro.tubos.size() == 5, "R (reiniciar) gera novo jogo de 5 tubos")
+	# --- Progressão de fases (Etapa 9) ---
+	ok(main.cores_da_fase(1) == 2 and main.cores_da_fase(5) == 6, "Fase 1 = 2 cores, Fase 5 = 6")
+	ok(main.cores_da_fase(6) == 6 and main.cores_da_fase(20) == 6, "Limite de 6 cores")
+
+	main.iniciar_fase(1)
+	ok(not main.botao_proxima.visible, "Botão Próxima Fase escondido sem vitória")
+	main.proxima_fase()
+	ok(main.fase == 1, "Sem vitória, Próxima Fase não avança")
+
+	for esperado in [2, 3, 4, 5, 6, 7]:
+		vencer(main)
+		ok(main.botao_proxima.visible, "Vitória mostra o botão Próxima Fase")
+		main.botao_proxima.pressed.emit()
+		var cores: int = mini(esperado + 1, 6)
+		ok(main.fase == esperado and main.tabuleiro.tubos.size() == cores + 2,
+			"Avança para a Fase %d com %d cores" % [esperado, cores])
+	ok(main.tabuleiro.tubos.size() == 8, "Após a Fase 5 continua com 6 cores (8 tubos)")
+
+	main.iniciar_fase(3)
+	tecla(main, KEY_R)
+	ok(main.fase == 3 and main.tabuleiro.tubos.size() == 6, "R reinicia a fase ATUAL (Fase 3)")
+	vencer(main)
+	tecla(main, KEY_N)
+	ok(main.fase == 4 and main.tabuleiro.tubos.size() == 7, "Tecla N avança de fase")
 
 	main.queue_free()
 	if falhas == 0:
