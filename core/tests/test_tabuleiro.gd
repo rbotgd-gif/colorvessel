@@ -92,7 +92,7 @@ func _init() -> void:
 	ok(not tabuleiro([tubo([1, 1, 1]), tubo([1])]).is_vitoria(), "Tubo incompleto (mesma cor) = sem vitória")
 
 	# --- gerar_novo_jogo ---
-	for qtd in [1, 3, 5]:
+	for qtd in [2, 3, 5]:
 		for semente in 20:
 			tab = TabuleiroClass.new()
 			tab.rng.seed = semente
@@ -114,6 +114,18 @@ func _init() -> void:
 			ok(cores_ok, "qtd=%d seed=%d: cada cor 1..qtd aparece 4 vezes" % [qtd, semente])
 			ok(not algum_completo, "qtd=%d seed=%d: nenhum tubo começa completo" % [qtd, semente])
 			ok(not tab.is_vitoria(), "qtd=%d seed=%d: jogo não inicia resolvido" % [qtd, semente])
+			ok(tab.tubos[qtd].is_vazio() and tab.tubos[qtd + 1].is_vazio(), "qtd=%d seed=%d: 2 últimos tubos vazios" % [qtd, semente])
+			var primeiros_cheios: bool = true
+			for i in qtd:
+				primeiros_cheios = primeiros_cheios and tab.tubos[i].is_cheio()
+			ok(primeiros_cheios, "qtd=%d seed=%d: tubos 0..qtd-1 cheios" % [qtd, semente])
+
+	# qtd_cores == 1: o único tubo com blocos sempre sai completo (caso de falha aceito).
+	tab = TabuleiroClass.new()
+	tab.gerar_novo_jogo(1)
+	ok(tab.tubos.size() == 3, "qtd=1: cria 3 tubos")
+	ok(tab.tubos[0].cores == [1, 1, 1, 1], "qtd=1: tubo 0 com [1,1,1,1]")
+	ok(tab.tubos[1].is_vazio() and tab.tubos[2].is_vazio(), "qtd=1: 2 últimos tubos vazios")
 
 	if falhas == 0:
 		print("OK: Todos os testes passaram!")
