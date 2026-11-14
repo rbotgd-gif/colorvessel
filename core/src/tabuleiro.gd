@@ -47,14 +47,18 @@ const MAX_TENTATIVAS_GERACAO: int = 100
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 # Cria (qtd_cores + 2) tubos, monta qtd_cores tubos com 4 blocos de cor 1..qtd_cores
-# e embaralha todos os blocos entre todos os tubos. Repete até nenhum tubo
+# e embaralha os blocos só entre esses qtd_cores tubos. Os 2 últimos ficam vazios
+# (área de manobra; sem eles a fase nasce em deadlock). Repete até nenhum tubo
 # começar completo (ou esgotar MAX_TENTATIVAS_GERACAO, mantendo a última tentativa).
+# Com qtd_cores == 1 o único tubo com blocos sempre sai completo: é o caso de falha.
 # TODO: garantir solvabilidade (validação futura, ver Etapa 5).
 func gerar_novo_jogo(qtd_cores: int) -> void:
 	assert(qtd_cores > 0, "Tabuleiro: qtd_cores deve ser > 0")
+	if qtd_cores <= 0:
+		return  # assert some em build de release; não gera nada.
 	for tentativa in MAX_TENTATIVAS_GERACAO:
 		_montar_resolvido(qtd_cores)
-		_embaralhar_blocos()
+		_embaralhar_blocos(qtd_cores)
 		if not _algum_tubo_completo():
 			return
 
@@ -68,25 +72,26 @@ func _montar_resolvido(qtd_cores: int) -> void:
 		novos.append(t)
 	tubos = novos
 
-# Recolhe todos os blocos, embaralha e redistribui cada um num tubo aleatório
-# com espaço. Usa cores.append direto: a regra de topo (pode_receber) vale para
-# jogadas, não para montar o estado inicial.
-func _embaralhar_blocos() -> void:
+# Recolhe os blocos dos tubos 0..qtd_cores-1, embaralha (Fisher-Yates) e
+# redistribui em ordem só nesses tubos, enchendo cada um até a capacidade.
+# Os tubos qtd_cores e qtd_cores+1 não são tocados (continuam vazios).
+# Usa cores.append direto: a regra de topo (pode_receber) vale para jogadas,
+# não para montar o estado inicial.
+func _embaralhar_blocos(qtd_cores: int) -> void:
 	var blocos: Array[int] = []
-	for t in tubos:
-		blocos.append_array(t.cores)
-		t.cores.clear()
+	for i in qtd_cores:
+		blocos.append_array(tubos[i].cores)
+		tubos[i].cores.clear()
 	for i in range(blocos.size() - 1, 0, -1):
 		var j: int = rng.randi_range(0, i)
 		var tmp: int = blocos[i]
 		blocos[i] = blocos[j]
 		blocos[j] = tmp
+	var idx_tubo: int = 0
 	for cor in blocos:
-		var com_espaco: Array[Tube] = []
-		for t in tubos:
-			if not t.is_cheio():
-				com_espaco.append(t)
-		com_espaco[rng.randi_range(0, com_espaco.size() - 1)].cores.append(cor)
+		if tubos[idx_tubo].is_cheio():
+			idx_tubo += 1
+		tubos[idx_tubo].cores.append(cor)
 
 func _algum_tubo_completo() -> bool:
 	for t in tubos:
