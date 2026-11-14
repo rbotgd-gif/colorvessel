@@ -68,6 +68,23 @@ func _init() -> void:
 	ok(tab.mover_liquido(0, 1) == true, "Destino cap 2 aceita parcial")
 	ok(tab.tubos[0].cores == [7] and tab.tubos[1].cores == [7, 7], "Move só 2 para cap 2")
 
+	# --- Multicor [2, 1, 1]: só o bloco contíguo do topo se move ---
+	tab = tabuleiro([tubo([2, 1, 1]), tubo([])])
+	ok(tab.calcular_quantidade(0, 1) == 2, "Multicor [2,1,1] move 2 (não 3)")
+	ok(tab.mover_liquido(0, 1) == true, "Multicor [2,1,1] para vazio é válido")
+	ok(tab.tubos[0].cores == [2] and tab.tubos[1].cores == [1, 1], "Origem [2], destino [1,1]")
+	ok(tab.mover_liquido(0, 1) == false, "Depois, 2 sobre 1 é inválido")
+
+	# --- Topo uniforme [1, 1, 1] para vazio move 3 ---
+	tab = tabuleiro([tubo([1, 1, 1]), tubo([])])
+	ok(tab.mover_liquido(0, 1) == true, "[1,1,1] para vazio é válido")
+	ok(tab.tubos[0].is_vazio() and tab.tubos[1].cores == [1, 1, 1], "Move os 3 blocos")
+
+	# --- get_espaco_livre ---
+	ok(tubo([]).get_espaco_livre() == 4, "Tubo vazio cap 4 tem 4 livres")
+	ok(tubo([1, 2, 3]).get_espaco_livre() == 1, "Tubo com 3 tem 1 livre")
+	ok(tubo([1, 1, 1, 1, 1]).get_espaco_livre() == 0, "Acima da capacidade não fica negativo")
+
 	if falhas == 0:
 		print("OK: Todos os testes passaram!")
 	else:

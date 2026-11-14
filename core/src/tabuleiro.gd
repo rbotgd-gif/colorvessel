@@ -22,8 +22,7 @@ func calcular_quantidade(idx_origem: int, idx_destino: int) -> int:
 		return 0
 	if not destino.is_vazio() and destino.get_cor_topo() != origem.get_cor_topo():
 		return 0
-	var espaco_livre: int = destino.capacidade - destino.cores.size()
-	return mini(origem.contar_topo_igual(), espaco_livre)
+	return mini(origem.contar_topo_igual(), destino.get_espaco_livre())
 
 func mover_liquido(idx_origem: int, idx_destino: int) -> bool:
 	var qtd: int = calcular_quantidade(idx_origem, idx_destino)
