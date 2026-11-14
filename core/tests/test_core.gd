@@ -42,7 +42,18 @@ func _init() -> void:
 	ok(tubo_teste.contar_topo_igual() == 1, "Deve haver 1 bloco de cor 8 no topo")
 	ok(tubo_teste.remover_topo() == 8, "Remover topo deve retornar a cor 8")
 	ok(tubo_teste.contar_topo_igual() == 2, "Agora deve haver 2 blocos de cor 7 no topo")
-	
+
+	# --- Teste de Tubo Vazio (sentinela COR_VAZIA) ---
+	var tubo_vazio = TubeClass.new()
+	ok(tubo_vazio.get_cor_topo() == TubeClass.COR_VAZIA, "Topo de tubo vazio deve ser COR_VAZIA")
+	ok(tubo_vazio.remover_topo() == TubeClass.COR_VAZIA, "Remover de tubo vazio deve retornar COR_VAZIA")
+	ok(tubo_vazio.contar_topo_igual() == 0, "Tubo vazio tem 0 blocos no topo")
+
+	# --- Teste de Tubo Cheio Recusa Cor Igual ---
+	var tubo_cheio = TubeClass.new()
+	tubo_cheio.cores = [3, 3, 3, 3] as Array[int]
+	ok(tubo_cheio.adicionar_cor(3) == false, "Tubo cheio deve recusar até a mesma cor")
+
 	if falhas == 0:
 		print("OK: Todos os testes passaram!")
 	else:
