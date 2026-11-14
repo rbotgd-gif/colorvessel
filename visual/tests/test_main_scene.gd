@@ -67,6 +67,34 @@ func _initialize() -> void:
 	main.clicar_tubo(main.indice_tubo_em(Vector2(-100, -100)))
 	ok(main.selecionado == main.SEM_SELECAO, "Clicar fora de qualquer tubo desmarca")
 
+	# --- Polimento visual (Etapa 7): paleta, fundo térmico, gelatina ---
+	ok(main.cor_visual(1) == Color("#0096C7"), "Cor 1 é o Ciano do Art Bible")
+	ok(main.cor_visual(2) == Color("#E00088"), "Cor 2 é o Rosa do Art Bible")
+	ok(main.cor_visual(99) == main.COR_DESCONHECIDA, "Cor fora da paleta cai no neutro")
+	var unicas := {}
+	for c in main.CORES.values():
+		unicas[c] = true
+	ok(main.CORES.size() == 9 and unicas.size() == 9, "Paleta tem 9 cores distintas")
+
+	main.calor = 0.0
+	ok(main.cor_fundo() == main.COR_FUNDO_FRIO, "Sem calor o fundo é o frio")
+	main.calor = 1.0
+	ok(main.cor_fundo() == main.COR_FUNDO_QUENTE, "Com calor máximo o fundo é o quente")
+	main.calor = 0.0
+
+	main.clicar_tubo(0)
+	ok(main.alvo_calor() == 1.0, "Selecionar um tubo mira o fundo quente")
+	ok(main.escala_gelatina(1) == Vector2.ONE, "Tubo não selecionado não balança")
+	main.tempo = PI / (2.0 * main.SQUASH_VELOCIDADE)  # pico da onda
+	var e: Vector2 = main.escala_gelatina(0)
+	ok(e.x > 1.0 and e.y < 1.0, "Tubo selecionado faz squash & stretch")
+	await create_timer(main.DURACAO_CALOR + 0.15).timeout
+	ok(is_equal_approx(main.calor, 1.0), "Tween leva o fundo até o quente")
+	main.clicar_tubo(0)
+	ok(main.alvo_calor() == 0.0, "Desmarcar mira o fundo frio")
+	await create_timer(main.DURACAO_CALOR + 0.15).timeout
+	ok(is_equal_approx(main.calor, 0.0), "Tween devolve o fundo ao frio")
+
 	main.reiniciar()
 	ok(main.tabuleiro.tubos.size() == 5, "R (reiniciar) gera novo jogo de 5 tubos")
 
