@@ -42,25 +42,52 @@ func is_vitoria() -> bool:
 	return true
 
 const MAX_TENTATIVAS_GERACAO: int = 100
+const SolucionadorClass = preload("res://core/src/solucionador.gd")
 
 # RNG próprio para os testes poderem fixar a semente (rng.seed = X).
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
+# Quem valida cada fase gerada: func(Tabuleiro) -> Dictionary com "resultado".
+# Os testes trocam por um espião para provar que o gerador consulta o solucionador.
+var validador: Callable = Callable(SolucionadorClass, "resolver")
+
 # Cria (qtd_cores + 2) tubos, monta qtd_cores tubos com 4 blocos de cor 1..qtd_cores
 # e embaralha os blocos só entre esses qtd_cores tubos. Os 2 últimos ficam vazios
-# (área de manobra; sem eles a fase nasce em deadlock). Repete até nenhum tubo
-# começar completo (ou esgotar MAX_TENTATIVAS_GERACAO, mantendo a última tentativa).
-# Com qtd_cores == 1 o único tubo com blocos sempre sai completo: é o caso de falha.
-# TODO: garantir solvabilidade (validação futura, ver Etapa 5).
-func gerar_novo_jogo(qtd_cores: int) -> void:
+# (área de manobra). Só aceita a fase se nenhum tubo começar completo E o
+# Solucionador (BFS) disser RESOLVIVEL; senão tenta de novo, até MAX_TENTATIVAS_GERACAO.
+# Se esgotar, volta para a última tentativa RESOLVIVEL (mesmo com tubo completo) ou,
+# sem nenhuma, para o tabuleiro já resolvido: nunca entrega fase impossível.
+# Devolve false só nesse caso de esgotamento.
+# Com qtd_cores == 1 o único tubo sempre sai completo: cai no esgotamento (fase [1,1,1,1]).
+func gerar_novo_jogo(qtd_cores: int) -> bool:
 	assert(qtd_cores > 0, "Tabuleiro: qtd_cores deve ser > 0")
 	if qtd_cores <= 0:
-		return  # assert some em build de release; não gera nada.
+		return false  # assert some em build de release; não gera nada.
+	var ultima_resolvivel: Array = []
 	for tentativa in MAX_TENTATIVAS_GERACAO:
 		_montar_resolvido(qtd_cores)
 		_embaralhar_blocos(qtd_cores)
-		if not _algum_tubo_completo():
-			return
+		var completo := _algum_tubo_completo()
+		if completo and not ultima_resolvivel.is_empty():
+			continue  # já há reserva resolvível; não gasta BFS com fase sem desafio
+		if validador.call(self)["resultado"] != SolucionadorClass.Resultado.RESOLVIVEL:
+			continue
+		if not completo:
+			return true
+		ultima_resolvivel = _copiar_cores()
+	if ultima_resolvivel.is_empty():
+		_montar_resolvido(qtd_cores)  # último recurso: fase já vencida, nunca travada
+	else:
+		for i in tubos.size():
+			tubos[i].cores.assign(ultima_resolvivel[i])
+	push_warning("Tabuleiro: %d tentativas sem fase ideal (qtd_cores=%d)" % [MAX_TENTATIVAS_GERACAO, qtd_cores])
+	return false
+
+func _copiar_cores() -> Array:
+	var copia: Array = []
+	for t in tubos:
+		copia.append(t.cores.duplicate())
+	return copia
 
 func _montar_resolvido(qtd_cores: int) -> void:
 	var novos: Array[Tube] = []
