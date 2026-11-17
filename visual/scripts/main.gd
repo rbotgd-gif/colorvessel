@@ -31,17 +31,25 @@ const ALFA_MINIMO: float = 0.08    # abaixo disso é ruído do fundo -> 100% tra
 const COR_FUNDO_FRIO := Color.WHITE            # fundo sem filtro
 const COR_FUNDO_QUENTE := Color("#FFB077")     # filtro laranja multiplicado ao esquentar
 const COR_BORDA_SELECAO := Color("#FFC300")
-const COR_TEXTO := Color("#0F172A")
+const COR_TEXTO := Color("#E6FBFF")            # texto claro sobre o visor escuro
+const COR_VISOR_FUNDO := Color(0.03, 0.08, 0.12, 0.72)  # escuro translúcido
+const COR_VISOR_BORDA := Color(0.22, 0.91, 1.0, 0.65)   # ciano luminoso sutil
+const COR_VISOR_BRILHO := Color(0.22, 0.91, 1.0, 0.22)
+const COR_COMPLETO := Color("#7CFFB2")         # destaque de tubo completo
 const COR_DESCONHECIDA := Color("#8D99AE")
-# Parecer de arte: "Fase: X" no topo; status/vitória mais abaixo para não colidir.
-const Y_TEXTO_FASE: float = 40.0
-const Y_TEXTO_STATUS: float = 90.0
+# HUD "Visor Térmico": painel arredondado no topo com fase, status e botão.
+const Y_HUD: float = 14.0
+const RAIO_VISOR: int = 14
 const TAM_FONTE_FASE: int = 32
 const TAM_FONTE_STATUS: int = 24
 const TAM_BOTAO := Vector2(200, 44)
 const DURACAO_CALOR: float = 0.35  # segundos para o fundo esquentar/esfriar
 const SQUASH_AMPLITUDE: float = 0.08
 const SQUASH_VELOCIDADE: float = 9.0
+const DURACAO_MOVIMENTO: float = 0.15  # deslocamento dos blocos entre tubos (só visual)
+const ATRASO_BLOCO: float = 0.04       # escalonamento entre blocos do mesmo despejo
+const PUNCH_ESCALA: float = 1.18
+const DURACAO_PUNCH: float = 0.35
 # Chave = cor do Core (numera a partir de 1). Ciano e Rosa vêm do Art Bible;
 # TODO: as outras 7 são provisórias até o D1 resgatar a paleta original.
 const CORES: Dictionary = {
@@ -60,6 +68,9 @@ var tabuleiro: Tabuleiro
 var selecionado: int = SEM_SELECAO
 var fase: int = FASE_INICIAL
 var botao_proxima: Button
+var hud: PanelContainer
+var label_fase: Label
+var label_status: Label
 var calor: float = 0.0  # 0 = frio, 1 = quente; animado por tween (só UI)
 var tempo: float = 0.0  # relógio da animação de gelatina
 var _tween_calor: Tween
@@ -85,13 +96,7 @@ func _ready() -> void:
 	camada = Node2D.new()
 	camada.show_behind_parent = true
 	add_child(camada)
-	botao_proxima = Button.new()
-	botao_proxima.text = "Próxima Fase"
-	botao_proxima.size = TAM_BOTAO
-	botao_proxima.position = Vector2((get_viewport_rect().size.x - TAM_BOTAO.x) / 2.0,
-		Y_TEXTO_STATUS + 20.0)
-	botao_proxima.pressed.connect(proxima_fase)
-	add_child(botao_proxima)
+	_montar_hud()
 	tabuleiro = TabuleiroClass.new()
 	iniciar_fase(FASE_INICIAL)
 
@@ -121,8 +126,147 @@ func clicar_tubo(idx: int) -> void:
 	else:
 		var origem: int = selecionado
 		_selecionar(SEM_SELECAO)
-		tabuleiro.mover_liquido(origem, idx)
+		var antes_origem: int = tabuleiro.tubos[origem].cores.size()
+		var antes_destino: int = tabuleiro.tubos[idx].cores.size()
+		var moveu: bool = tabuleiro.mover_liquido(origem, idx)
+		montar()  # estado do Core já está final; o que segue é só animação
+		if moveu:
+			_animar_movimento(origem, idx, antes_origem, antes_destino)
+		return
 	montar()
+
+# --- Juice (só visual: nunca altera o Core nem espera por animação) ---
+
+# Os blocos recém-chegados ao destino nascem na posição que tinham na origem e deslizam.
+func _animar_movimento(origem: int, destino: int, antes_origem: int, antes_destino: int) -> void:
+	var movidos: int = tabuleiro.tubos[destino].cores.size() - antes_destino
+	var r_origem: Rect2 = rect_tubo(origem)
+	r_origem.position.y -= ELEVACAO_SELECAO  # saiu do tubo elevado
+	for k in movidos:
+		var b: Sprite2D = sprites_blocos[destino][antes_destino + k]
+		var fim: Vector2 = b.position
+		b.position = _sprite_pos(rect_bloco(r_origem, antes_origem - 1 - k))
+		b.z_index = 10
+		var tw: Tween = b.create_tween()  # preso ao sprite: montar() o descarta junto
+		tw.tween_property(b, "position", fim, DURACAO_MOVIMENTO) \
+			.set_delay(k * ATRASO_BLOCO).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_callback(func() -> void: b.z_index = 0)
+	var fim_total: float = DURACAO_MOVIMENTO + maxi(movidos - 1, 0) * ATRASO_BLOCO
+	get_tree().create_timer(fim_total).timeout.connect(_ao_fim_do_movimento.bind(destino))
+
+func _ao_fim_do_movimento(destino: int) -> void:
+	if not is_inside_tree() or tabuleiro == null or destino >= tabuleiro.tubos.size():
+		return
+	if tabuleiro.tubos[destino].is_completo():
+		pulsar_tubo(destino)
+	if tabuleiro.is_vitoria():
+		celebrar_vitoria()
+
+# Scale punch no vidro e nos blocos do tubo.
+func pulsar_tubo(idx: int) -> void:
+	if not is_inside_tree() or idx >= sprites_tubos.size():
+		return
+	var alvos: Array = [sprites_tubos[idx]]
+	alvos.append_array(sprites_blocos[idx])
+	for s: Sprite2D in alvos:
+		var base: Vector2 = s.get_meta("escala_base")
+		s.scale = base * PUNCH_ESCALA
+		s.create_tween().tween_property(s, "scale", base, DURACAO_PUNCH) \
+			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+
+# Celebração suave: onda de pulsos pelos tubos, brilho no visor e confete leve.
+func celebrar_vitoria() -> void:
+	if not is_inside_tree():
+		return
+	for i in sprites_tubos.size():
+		get_tree().create_timer(i * 0.07).timeout.connect(pulsar_tubo.bind(i))
+	if hud:
+		hud.modulate = Color(1.6, 1.6, 1.6)
+		hud.create_tween().tween_property(hud, "modulate", Color.WHITE, 0.8) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	var conf := CPUParticles2D.new()
+	conf.position = Vector2(get_viewport_rect().size.x / 2.0, 0.0)
+	conf.emitting = true
+	conf.one_shot = true
+	conf.explosiveness = 0.8
+	conf.amount = 40
+	conf.lifetime = 2.0
+	conf.direction = Vector2.DOWN
+	conf.spread = 70.0
+	conf.initial_velocity_min = 120.0
+	conf.initial_velocity_max = 260.0
+	conf.gravity = Vector2(0, 220)
+	conf.scale_amount_min = 3.0
+	conf.scale_amount_max = 6.0
+	var rampa := Gradient.new()
+	rampa.colors = PackedColorArray([COR_BORDA_SELECAO, COR_COMPLETO, Color(COR_VISOR_BORDA, 0.0)])
+	rampa.offsets = PackedFloat32Array([0.0, 0.5, 1.0])
+	conf.color_ramp = rampa
+	add_child(conf)
+	get_tree().create_timer(conf.lifetime + 0.5).timeout.connect(conf.queue_free)
+
+# --- HUD "Visor Térmico" ---
+
+func _estilo_visor(brilho: float = 1.0, raio: int = RAIO_VISOR) -> StyleBoxFlat:
+	var e := StyleBoxFlat.new()
+	e.bg_color = COR_VISOR_FUNDO
+	e.set_border_width_all(2)
+	e.border_color = Color(COR_VISOR_BORDA, minf(COR_VISOR_BORDA.a * brilho, 1.0))
+	e.set_corner_radius_all(raio)
+	e.shadow_color = Color(COR_VISOR_BRILHO, minf(COR_VISOR_BRILHO.a * brilho, 1.0))
+	e.shadow_size = 8
+	e.content_margin_left = 20
+	e.content_margin_right = 20
+	e.content_margin_top = 8
+	e.content_margin_bottom = 10
+	return e
+
+func _novo_label(tam: int) -> Label:
+	var l := Label.new()
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", tam)
+	l.add_theme_color_override("font_color", COR_TEXTO)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return l
+
+func _montar_hud() -> void:
+	hud = PanelContainer.new()
+	hud.add_theme_stylebox_override("panel", _estilo_visor())
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE  # cliques passam para os tubos
+	var caixa := VBoxContainer.new()
+	caixa.add_theme_constant_override("separation", 6)
+	caixa.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_child(caixa)
+	label_fase = _novo_label(TAM_FONTE_FASE)
+	label_status = _novo_label(TAM_FONTE_STATUS)
+	caixa.add_child(label_fase)
+	caixa.add_child(label_status)
+	botao_proxima = Button.new()
+	botao_proxima.text = "Próxima Fase"
+	botao_proxima.custom_minimum_size = TAM_BOTAO
+	botao_proxima.add_theme_color_override("font_color", COR_TEXTO)
+	botao_proxima.add_theme_color_override("font_hover_color", Color.WHITE)
+	botao_proxima.add_theme_stylebox_override("normal", _estilo_visor(1.0, 10))
+	botao_proxima.add_theme_stylebox_override("hover", _estilo_visor(1.5, 10))
+	botao_proxima.add_theme_stylebox_override("pressed", _estilo_visor(2.0, 10))
+	botao_proxima.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	botao_proxima.pressed.connect(proxima_fase)
+	caixa.add_child(botao_proxima)
+	add_child(hud)
+	hud.resized.connect(_centralizar_hud)
+
+func _centralizar_hud() -> void:
+	hud.position = Vector2((get_viewport_rect().size.x - hud.size.x) / 2.0, Y_HUD)
+
+func _atualizar_hud() -> void:
+	if hud == null:
+		return
+	label_fase.text = "Fase: %d" % fase
+	var venceu: bool = tabuleiro.is_vitoria()
+	label_status.text = "Vitória! (N/Enter: próxima fase)" if venceu else "R: reiniciar fase"
+	botao_proxima.visible = venceu
+	hud.reset_size()  # encolhe/expande conforme o botão aparece
+	_centralizar_hud()
 
 # --- Progressão de fases ---
 
@@ -196,17 +340,22 @@ func montar() -> void:
 			b.modulate = cor_visual(tubo.cores[j])  # tinge a base cinza (dual-layer)
 			linha.append(b)
 		sprites_blocos.append(linha)
-		sprites_tubos.append(_sprite(tex_tubo, r))  # vidro por cima dos blocos
-	if botao_proxima:
-		botao_proxima.visible = tabuleiro.is_vitoria()
+		var vidro: Sprite2D = _sprite(tex_tubo, r)  # vidro por cima dos blocos
+		if tubo.is_completo():
+			vidro.modulate = COR_COMPLETO.lerp(Color.WHITE, 0.5)  # brilho sutil
+		sprites_tubos.append(vidro)
+	_atualizar_hud()
 	queue_redraw()
+
+func _sprite_pos(r: Rect2) -> Vector2:
+	return Vector2(r.get_center().x, r.end.y)
 
 # Sprite com origem no centro-base: o squash "senta" no bloco de baixo.
 func _sprite(tex: Texture2D, r: Rect2) -> Sprite2D:
 	var s := Sprite2D.new()
 	s.texture = tex
 	s.offset = Vector2(0, -tex.get_height() / 2.0)
-	s.position = Vector2(r.get_center().x, r.end.y)
+	s.position = _sprite_pos(r)
 	s.scale = r.size / tex.get_size()
 	s.set_meta("escala_base", s.scale)
 	camada.add_child(s)
@@ -258,17 +407,13 @@ func escala_gelatina(idx: int) -> Vector2:
 	var onda: float = sin(tempo * SQUASH_VELOCIDADE) * SQUASH_AMPLITUDE
 	return Vector2(1.0 + onda, 1.0 - onda)
 
-# --- Desenho por cima dos sprites: borda de seleção e texto ---
+# --- Desenho por cima dos sprites: borda de seleção e destaque de tubo completo ---
 
 func _draw() -> void:
 	if tabuleiro == null:
 		return
 	if selecionado != SEM_SELECAO:
 		draw_rect(rect_tubo(selecionado), COR_BORDA_SELECAO, false, BORDA_SELECAO)
-	var fonte: Font = ThemeDB.fallback_font
-	var largura: float = get_viewport_rect().size.x
-	draw_string(fonte, Vector2(0, Y_TEXTO_FASE), "Fase: %d" % fase,
-		HORIZONTAL_ALIGNMENT_CENTER, largura, TAM_FONTE_FASE, COR_TEXTO)
-	var texto: String = "Vitória! (N/Enter: próxima fase)" if tabuleiro.is_vitoria() 		else "R: reiniciar fase"
-	draw_string(fonte, Vector2(0, Y_TEXTO_STATUS), texto, HORIZONTAL_ALIGNMENT_CENTER,
-		largura, TAM_FONTE_STATUS, COR_TEXTO)
+	for i in tabuleiro.tubos.size():  # destaque dos tubos completos
+		if tabuleiro.tubos[i].is_completo():
+			draw_rect(rect_tubo(i).grow(3.0), Color(COR_COMPLETO, 0.8), false, 3.0)
