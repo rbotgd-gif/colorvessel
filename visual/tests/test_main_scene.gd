@@ -157,6 +157,20 @@ func _initialize() -> void:
 	tecla(main, KEY_N)
 	ok(main.fase == 4 and main.tabuleiro.tubos.size() == 7, "Tecla N avança de fase")
 
+	# --- Fase 3: HUD superior e Dock de Poderes ---
+	main.iniciar_fase(2)
+	ok(main.hud_superior.label_nivel.text == "Nível 2", "HUD mostra 'Nível 2'")
+	ok(main.dock.botao_desfazer.disabled and not main.dock.badge_desfazer.visible, "Desfazer desabilitado sem histórico")
+	ok(main.dock.badge_tubo.text == "1" and not main.dock.botao_tubo.disabled, "Badge do +1 Tubo mostra 1 restante")
+	var n_tubos: int = main.tabuleiro.tubos.size()
+	main.dock.botao_tubo.pressed.emit()
+	ok(main.tabuleiro.tubos.size() == n_tubos + 1 and main.dock.botao_tubo.disabled, "+1 Tubo chega ao Core e esgota o poder")
+	ok(main.sprites_tubos.size() == n_tubos + 1, "Visual remonta com o tubo extra")
+	main.dock.botao_desfazer.pressed.emit()
+	ok(main.tabuleiro.tubos.size() == n_tubos and not main.dock.botao_tubo.disabled, "Desfazer remove o tubo auxiliar")
+	main.dock.botao_dica.pressed.emit()
+	ok(main.selecionado != main.SEM_SELECAO, "Dica seleciona a origem sugerida")
+
 	main.queue_free()
 	if falhas == 0:
 		print("OK: Todos os testes passaram!")

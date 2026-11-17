@@ -9,7 +9,8 @@ const TabuleiroViewClass = preload("res://visual/scripts/tabuleiro_view.gd")
 const T = preload("res://visual/tema/cv_tokens.gd")
 const Tema = preload("res://visual/tema/cv_tema.gd")
 const BotaoJuicy = preload("res://visual/ui/botao_juicy.gd")
-const Pilula = preload("res://visual/ui/pilula.gd")
+const HudSuperior = preload("res://visual/ui/hud_superior.gd")
+const DockPoderes = preload("res://visual/ui/dock_poderes.gd")
 
 const FASE_INICIAL: int = 1
 const CORES_FASE_INICIAL: int = 2  # Fase 1 = 2 cores; cada fase soma 1
@@ -25,12 +26,16 @@ const DURACAO_CALOR: float = TabuleiroViewClass.DURACAO_CALOR
 const SQUASH_VELOCIDADE: float = TabuleiroViewClass.SQUASH_VELOCIDADE
 
 const Y_HUD: float = 14.0
+const Y_STATUS: float = 100.0
+const MARGEM_TELA: float = 20.0
+const MARGEM_DOCK: float = 24.0
 const TAM_FONTE_STATUS: int = T.TAM_FONTE_CORPO
 
 var fase: int = FASE_INICIAL
 var vista: Node2D  # TabuleiroView
-var hud: PanelContainer
-var pilula_fase: Pilula
+var hud: PanelContainer  # status + Próxima Fase
+var hud_superior: HudSuperior
+var dock: DockPoderes
 var label_status: Label
 var botao_proxima: Button
 
@@ -105,7 +110,7 @@ func pulsar_tubo(idx: int) -> void:
 func celebrar_vitoria() -> void:
 	vista.celebrar_vitoria()
 
-# --- HUD "Visor Térmico" ---
+# --- HUD (Juicy Glossy) ---
 
 func _novo_label(tam: int) -> Label:
 	var l := Label.new()
@@ -116,17 +121,27 @@ func _novo_label(tam: int) -> Label:
 	return l
 
 func _montar_hud() -> void:
+	var tema: Theme = Tema.criar_tema()
+	var largura: float = get_viewport_rect().size.x
+	var altura: float = get_viewport_rect().size.y
+
+	# Barra superior: moedas | Nível X | configurações.
+	hud_superior = HudSuperior.new()
+	hud_superior.theme = tema
+	hud_superior.position = Vector2(MARGEM_TELA, Y_HUD)
+	hud_superior.size = Vector2(largura - 2.0 * MARGEM_TELA, 0.0)
+	add_child(hud_superior)
+
+	# Status + "Próxima Fase" logo abaixo da barra (cliques passam para os tubos).
 	hud = PanelContainer.new()
-	hud.theme = Tema.criar_tema()
-	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE  # cliques passam para os tubos
+	hud.theme = tema
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	var caixa := VBoxContainer.new()
 	caixa.add_theme_constant_override("separation", 8)
 	caixa.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.add_child(caixa)
-	pilula_fase = Pilula.new("FASE", "1")
-	pilula_fase.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	label_status = _novo_label(TAM_FONTE_STATUS)
-	caixa.add_child(pilula_fase)
 	caixa.add_child(label_status)
 	botao_proxima = BotaoJuicy.new()
 	botao_proxima.text = "Próxima Fase"
@@ -135,25 +150,59 @@ func _montar_hud() -> void:
 	add_child(hud)
 	hud.resized.connect(_centralizar_hud)
 
+	# Dock inferior de poderes.
+	dock = DockPoderes.new()
+	dock.theme = tema
+	add_child(dock)
+	dock.resized.connect(func() -> void:
+		dock.position = Vector2((largura - dock.size.x) / 2.0, altura - dock.size.y - MARGEM_DOCK))
+	dock.desfazer_pedido.connect(usar_desfazer)
+	dock.dica_pedida.connect(usar_dica)
+	dock.tubo_pedido.connect(usar_tubo)
+
 func _centralizar_hud() -> void:
-	hud.position = Vector2((get_viewport_rect().size.x - hud.size.x) / 2.0, Y_HUD)
+	hud.position = Vector2((get_viewport_rect().size.x - hud.size.x) / 2.0, Y_STATUS)
 
 func _atualizar_hud() -> void:
 	if hud == null:
 		return
-	pilula_fase.definir_valor(str(fase))
+	hud_superior.definir_nivel(fase)
 	var venceu: bool = tabuleiro.is_vitoria()
 	label_status.text = "Vitória! (N/Enter: próxima fase)" if venceu else "R: reiniciar fase"
 	botao_proxima.visible = venceu
 	hud.reset_size()  # encolhe/expande conforme o botão aparece
 	_centralizar_hud()
+	dock.atualizar(tabuleiro)
 
 func _brilhar_hud() -> void:
 	if hud == null:
 		return
 	hud.modulate = Color(1.6, 1.6, 1.6)
-	hud.create_tween().tween_property(hud, "modulate", Color.WHITE, 0.8) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	hud.create_tween().tween_property(hud, "modulate", Color.WHITE, 0.8) 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+# --- Poderes (a regra é do Core; aqui só intenção + remontar a partir do estado) ---
+
+func usar_desfazer() -> bool:
+	vista.selecionar(SEM_SELECAO)
+	var ok: bool = tabuleiro.desfazer()
+	vista.montar()
+	return ok
+
+func usar_tubo() -> bool:
+	vista.selecionar(SEM_SELECAO)
+	var ok: bool = tabuleiro.adicionar_tubo_auxiliar()
+	vista.montar()
+	return ok
+
+# Destaca a origem da próxima jogada sugerida e pulsa o destino. false se não há dica.
+func usar_dica() -> bool:
+	var d: Vector2i = tabuleiro.dica()
+	if d == Tabuleiro.SEM_DICA:
+		return false
+	vista.selecionar(d.x)
+	vista.montar()
+	vista.pulsar_tubo(d.y)
+	return true
 
 # --- Progressão de fases ---
 

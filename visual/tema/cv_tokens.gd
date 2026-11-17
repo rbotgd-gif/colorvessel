@@ -16,6 +16,8 @@ const VERMELHO_ALERTA := Color("#FF5A5F")
 const TEXTO := Color("#E6FBFF")
 const TEXTO_ESCURO := Color("#0B2530")
 const NEUTRO := Color("#8D99AE")
+const ROXO := Color("#5A189A")        # HUD/Dock: corpo das pílulas roxas
+const ROXO_ESCURO := Color("#3C096C")
 
 # --- Visor térmico (painéis escuros translúcidos) ---
 const VISOR_FUNDO := Color(0.03, 0.08, 0.12, 0.72)

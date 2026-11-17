@@ -12,6 +12,9 @@ const T = preload("res://visual/tema/cv_tokens.gd")
 const TEX_FUNDO: Texture2D = preload("res://visual/assets/fundo_geladeira.jpg")
 const TEX_TUBO_BRUTA: Texture2D = preload("res://visual/assets/tubo_vidro.png")
 const TEX_BLOCO_BRUTA: Texture2D = preload("res://visual/assets/bloco_gelatina.png")
+# Sprites 3D (Blender) com alfa real: preferidos; se faltarem, cai no asset antigo + chroma key.
+const CAMINHO_TUBO_3D := "res://visual/assets/blender/tubo_vidro_3d.png"
+const CAMINHO_BLOCO_3D := "res://visual/assets/blender/bloco_gelatina_3d.png"
 
 const SEM_SELECAO: int = -1
 
@@ -59,8 +62,8 @@ var sprites_tubos: Array[Sprite2D] = []
 var sprites_blocos: Array = []  # [tubo] -> Array[Sprite2D], de baixo para cima
 
 func _ready() -> void:
-	tex_tubo = chroma_key(TEX_TUBO_BRUTA, LIMIAR_TUBO)
-	tex_bloco = chroma_key(TEX_BLOCO_BRUTA, LIMIAR_BLOCO)
+	tex_tubo = _textura(CAMINHO_TUBO_3D, TEX_TUBO_BRUTA, LIMIAR_TUBO)
+	tex_bloco = _textura(CAMINHO_BLOCO_3D, TEX_BLOCO_BRUTA, LIMIAR_BLOCO)
 	fundo = TextureRect.new()
 	fundo.texture = TEX_FUNDO
 	fundo.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -179,6 +182,14 @@ func alvo_calor() -> float:
 	return 0.0 if selecionado == SEM_SELECAO else 1.0
 
 # --- Assets ---
+
+# Prefere o sprite 3D com alfa real; senão (ausente/não importado) usa o antigo com chroma key.
+static func _textura(caminho_3d: String, bruta: Texture2D, limiar: float) -> Texture2D:
+	if ResourceLoader.exists(caminho_3d):
+		var tex := load(caminho_3d) as Texture2D
+		if tex != null:
+			return tex
+	return chroma_key(bruta, limiar)
 
 # Remove o fundo escuro chapado: o alfa cresce com a distância da cor do canto, e a
 # cor é "despremultiplicada" sobre esse fundo para o vidro não ficar acinzentado.
