@@ -42,7 +42,7 @@ static func resolver(tab: Tabuleiro, max_estados: int = MAX_ESTADOS_PADRAO) -> D
 					continue
 				if uniforme and atual.tubos[d].is_vazio():
 					continue  # só troca o tubo de lugar: estado equivalente
-				atual.mover_liquido(o, d)
+				atual.mover_sem_historico(o, d)
 				var chave_nova := _chave(atual)
 				var nova := not visitados.has(chave_nova)
 				var venceu := nova and atual.is_vitoria()
