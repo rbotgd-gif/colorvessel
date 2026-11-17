@@ -8,7 +8,6 @@ const TabuleiroClass = preload("res://core/src/tabuleiro.gd")
 const TabuleiroViewClass = preload("res://visual/scripts/tabuleiro_view.gd")
 const T = preload("res://visual/tema/cv_tokens.gd")
 const Tema = preload("res://visual/tema/cv_tema.gd")
-const BotaoJuicy = preload("res://visual/ui/botao_juicy.gd")
 const HudSuperior = preload("res://visual/ui/hud_superior.gd")
 const DockPoderes = preload("res://visual/ui/dock_poderes.gd")
 
@@ -25,18 +24,11 @@ const COR_FUNDO_QUENTE := TabuleiroViewClass.COR_FUNDO_QUENTE
 const DURACAO_CALOR: float = TabuleiroViewClass.DURACAO_CALOR
 const SQUASH_VELOCIDADE: float = TabuleiroViewClass.SQUASH_VELOCIDADE
 
-const Y_HUD: float = 14.0
-const Y_STATUS: float = 100.0
-const MARGEM_TELA: float = 20.0
-const MARGEM_DOCK: float = 24.0
-const TAM_FONTE_STATUS: int = T.TAM_FONTE_CORPO
 
 var fase: int = FASE_INICIAL
 var vista: Node2D  # TabuleiroView
-var hud: PanelContainer  # status + Próxima Fase
 var hud_superior: HudSuperior
 var dock: DockPoderes
-var label_status: Label
 var botao_proxima: Button
 
 # --- Proxies para o estado/ações da view ---
@@ -67,6 +59,7 @@ func _ready() -> void:
 	vista.montado.connect(_atualizar_hud)
 	vista.vitoria_celebrada.connect(_brilhar_hud)
 	add_child(vista)
+	move_child(vista, 0)
 	_montar_hud()
 	vista.tabuleiro = TabuleiroClass.new()
 	iniciar_fase(FASE_INICIAL)
@@ -112,73 +105,31 @@ func celebrar_vitoria() -> void:
 
 # --- HUD (Juicy Glossy) ---
 
-func _novo_label(tam: int) -> Label:
-	var l := Label.new()
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", tam)
-	l.add_theme_color_override("font_color", T.TEXTO)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	return l
-
 func _montar_hud() -> void:
+	# (CanvasLayer: os anchors resolvem contra a viewport, não contra o Node2D.) HUD, botão "Próxima Fase" e dock vêm da cena (anchors/offsets para 720x1280).
 	var tema: Theme = Tema.criar_tema()
-	var largura: float = get_viewport_rect().size.x
-	var altura: float = get_viewport_rect().size.y
-
-	# Barra superior: moedas | Nível X | configurações.
-	hud_superior = HudSuperior.new()
-	hud_superior.theme = tema
-	hud_superior.position = Vector2(MARGEM_TELA, Y_HUD)
-	hud_superior.size = Vector2(largura - 2.0 * MARGEM_TELA, 0.0)
-	add_child(hud_superior)
-
-	# Status + "Próxima Fase" logo abaixo da barra (cliques passam para os tubos).
-	hud = PanelContainer.new()
-	hud.theme = tema
-	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
-	var caixa := VBoxContainer.new()
-	caixa.add_theme_constant_override("separation", 8)
-	caixa.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hud.add_child(caixa)
-	label_status = _novo_label(TAM_FONTE_STATUS)
-	caixa.add_child(label_status)
-	botao_proxima = BotaoJuicy.new()
-	botao_proxima.text = "Próxima Fase"
+	hud_superior = $Interface/HudSuperior
+	botao_proxima = $Interface/BotaoProxima
+	dock = $Interface/DockPoderes
+	for c: Control in [hud_superior, botao_proxima, dock]:
+		c.theme = tema
 	botao_proxima.pressed.connect(proxima_fase)
-	caixa.add_child(botao_proxima)
-	add_child(hud)
-	hud.resized.connect(_centralizar_hud)
-
-	# Dock inferior de poderes.
-	dock = DockPoderes.new()
-	dock.theme = tema
-	add_child(dock)
-	dock.resized.connect(func() -> void:
-		dock.position = Vector2((largura - dock.size.x) / 2.0, altura - dock.size.y - MARGEM_DOCK))
 	dock.desfazer_pedido.connect(usar_desfazer)
 	dock.dica_pedida.connect(usar_dica)
 	dock.tubo_pedido.connect(usar_tubo)
 
-func _centralizar_hud() -> void:
-	hud.position = Vector2((get_viewport_rect().size.x - hud.size.x) / 2.0, Y_STATUS)
-
 func _atualizar_hud() -> void:
-	if hud == null:
+	if hud_superior == null:
 		return
 	hud_superior.definir_nivel(fase)
-	var venceu: bool = tabuleiro.is_vitoria()
-	label_status.text = "Vitória! (N/Enter: próxima fase)" if venceu else "R: reiniciar fase"
-	botao_proxima.visible = venceu
-	hud.reset_size()  # encolhe/expande conforme o botão aparece
-	_centralizar_hud()
+	botao_proxima.visible = tabuleiro.is_vitoria()
 	dock.atualizar(tabuleiro)
 
 func _brilhar_hud() -> void:
-	if hud == null:
+	if hud_superior == null:
 		return
-	hud.modulate = Color(1.6, 1.6, 1.6)
-	hud.create_tween().tween_property(hud, "modulate", Color.WHITE, 0.8) 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	hud_superior.modulate = Color(1.6, 1.6, 1.6)
+	hud_superior.create_tween().tween_property(hud_superior, "modulate", Color.WHITE, 0.8) 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 # --- Poderes (a regra é do Core; aqui só intenção + remontar a partir do estado) ---
 

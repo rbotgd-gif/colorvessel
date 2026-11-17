@@ -18,13 +18,19 @@ const CAMINHO_BLOCO_3D := "res://visual/assets/blender/bloco_gelatina_3d.png"
 
 const SEM_SELECAO: int = -1
 
-const LARGURA_TUBO: float = 60.0
-const ALTURA_BLOCO: float = 40.0
-const ESPACO_TUBOS: float = 30.0
-const FOLGA_BLOCO: float = 6.0
+# Layout (viewport 720x1280): a grade fica centrada na faixa Y 340..920.
+const ZONA_Y_TOPO: float = 340.0
+const ZONA_Y_BASE: float = 920.0
+const MARGEM_LATERAL: float = 48.0
+const ESPACO_TUBOS: float = 24.0
+const ESPACO_FILAS: float = 24.0
+const MAX_POR_FILA: int = 5
+const LARGURA_TUBO_MAX: float = 110.0
+const PROPORCAO_TUBO: float = 3.6      # altura / largura do vidro visível (bounding box)
+const MARGEM_INTERNA: float = 0.14     # fração da largura, de cada lado, entre vidro e gelatina
+const FOLGA_VERTICAL: float = 0.05     # fração da altura: base e topo do tubo sem gelatina
 const ELEVACAO_SELECAO: float = 24.0
 const BORDA_SELECAO: float = 5.0
-const ALTURA_PRATELEIRA: float = 0.6  # fração da altura do fundo onde fica a prateleira do meio
 # Chroma key: tubo e bloco vieram com fundo escuro opaco (sem alfa).
 const RESOLUCAO_CHROMA: int = 256  # reduz antes: rápido e suficiente para o tamanho na tela
 const LIMIAR_TUBO: float = 0.5     # vidro: o interior escuro fica quase transparente
@@ -353,46 +359,65 @@ func montar() -> void:
 	montado.emit()
 	queue_redraw()
 
-func _sprite_pos(r: Rect2) -> Vector2:
-	return Vector2(r.get_center().x, r.end.y)
+# Recorte útil (bounding box dos pixels não transparentes) da textura, em cache.
+var _recortes: Dictionary = {}
 
-# Sprite com origem no centro-base: o squash "senta" no bloco de baixo.
+func _recorte(tex: Texture2D) -> Rect2:
+	if not _recortes.has(tex):
+		var img: Image = tex.get_image()
+		if img.is_compressed():
+			img.decompress()
+		_recortes[tex] = Rect2(img.get_used_rect())
+	return _recortes[tex]
+
+# Sprite cujo recorte útil preenche exatamente r, com origem no centro-base do recorte
+# (o squash "senta" no bloco de baixo).
 func _sprite(tex: Texture2D, r: Rect2) -> Sprite2D:
+	var rec: Rect2 = _recorte(tex)
 	var s := Sprite2D.new()
 	s.texture = tex
-	s.offset = Vector2(0, -tex.get_height() / 2.0)
-	s.position = _sprite_pos(r)
-	s.scale = r.size / tex.get_size()
+	var tam: Vector2 = tex.get_size()
+	s.offset = tam / 2.0 - Vector2(rec.get_center().x, rec.end.y)
+	s.position = Vector2(r.get_center().x, r.end.y)
+	s.scale = r.size / rec.size
 	s.set_meta("escala_base", s.scale)
 	camada.add_child(s)
 	return s
 
 # --- Layout (só geometria de tela, nenhuma regra) ---
 
-# Y da prateleira do meio, seguindo o "cover" do fundo na tela.
-func base_prateleira() -> float:
-	var tela: Vector2 = get_viewport_rect().size
-	var tam: Vector2 = TEX_FUNDO.get_size()
-	var escala: float = maxf(tela.x / tam.x, tela.y / tam.y)
-	return tela.y / 2.0 + (ALTURA_PRATELEIRA - 0.5) * tam.y * escala
-
+# Retângulo do vidro visível (recorte útil do sprite), em grade centrada na zona de jogo.
 func rect_tubo(idx: int) -> Rect2:
 	var qtd: int = tabuleiro.tubos.size()
 	var tela: Vector2 = get_viewport_rect().size
-	var altura: float = tabuleiro.tubos[idx].capacidade * ALTURA_BLOCO + FOLGA_BLOCO
-	var largura_total: float = qtd * LARGURA_TUBO + (qtd - 1) * ESPACO_TUBOS
-	var x: float = (tela.x - largura_total) / 2.0 + idx * (LARGURA_TUBO + ESPACO_TUBOS)
-	var y: float = base_prateleira() - altura
+	var filas: int = ceili(float(qtd) / MAX_POR_FILA)
+	var por_fila: int = ceili(float(qtd) / filas)
+	var largura: float = minf(LARGURA_TUBO_MAX,
+		(tela.x - 2.0 * MARGEM_LATERAL - (por_fila - 1) * ESPACO_TUBOS) / por_fila)
+	var zona: float = ZONA_Y_BASE - ZONA_Y_TOPO
+	largura = minf(largura, (zona - (filas - 1) * ESPACO_FILAS) / filas / PROPORCAO_TUBO)
+	var altura: float = largura * PROPORCAO_TUBO
+	var fila: int = idx / por_fila
+	var col: int = idx % por_fila
+	var na_fila: int = mini(por_fila, qtd - fila * por_fila)  # última fila pode ter menos
+	var x: float = (tela.x - (na_fila * largura + (na_fila - 1) * ESPACO_TUBOS)) / 2.0 		+ col * (largura + ESPACO_TUBOS)
+	var bloco_total: float = filas * altura + (filas - 1) * ESPACO_FILAS
+	var y: float = (ZONA_Y_TOPO + ZONA_Y_BASE - bloco_total) / 2.0 + fila * (altura + ESPACO_FILAS)
 	if idx == selecionado:
 		y -= ELEVACAO_SELECAO
-	return Rect2(x, y, LARGURA_TUBO, altura)
+	return Rect2(x, y, largura, altura)
 
+# Bloco j (0 = fundo) dentro do tubo r: 14% de margem de cada lado, nunca encosta no vidro.
 func rect_bloco(r: Rect2, j: int) -> Rect2:
+	var cap: int = tabuleiro.tubos[0].capacidade
+	var folga_y: float = r.size.y * FOLGA_VERTICAL
+	var alt: float = (r.size.y - 2.0 * folga_y) / cap
+	var folga_x: float = r.size.x * MARGEM_INTERNA
 	return Rect2(
-		r.position.x + FOLGA_BLOCO,
-		r.end.y - FOLGA_BLOCO - (j + 1) * ALTURA_BLOCO + 2.0,
-		LARGURA_TUBO - 2.0 * FOLGA_BLOCO,
-		ALTURA_BLOCO - 2.0)
+		r.position.x + folga_x,
+		r.end.y - folga_y - (j + 1) * alt + 1.0,
+		r.size.x - 2.0 * folga_x,
+		alt - 2.0)
 
 func indice_tubo_em(pos: Vector2) -> int:
 	for i in tabuleiro.tubos.size():

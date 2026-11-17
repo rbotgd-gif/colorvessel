@@ -1,6 +1,49 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://visual/scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://visual/ui/hud_superior.gd" id="2_hud"]
+[ext_resource type="Script" path="res://visual/ui/dock_poderes.gd" id="3_dock"]
+[ext_resource type="Script" path="res://visual/ui/botao_juicy.gd" id="4_botao"]
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_main")
+
+[node name="Interface" type="CanvasLayer" parent="."]
+
+[node name="HudSuperior" type="HBoxContainer" parent="Interface"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 24.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 88.0
+grow_horizontal = 2
+script = ExtResource("2_hud")
+
+[node name="BotaoProxima" type="Button" parent="Interface"]
+visible = false
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.75
+anchor_right = 0.5
+anchor_bottom = 0.75
+offset_left = -150.0
+offset_right = 150.0
+offset_bottom = 84.0
+grow_horizontal = 2
+text = "Próxima Fase"
+script = ExtResource("4_botao")
+
+[node name="DockPoderes" type="PanelContainer" parent="Interface"]
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -300.0
+offset_top = -170.0
+offset_right = 300.0
+offset_bottom = -48.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("3_dock")

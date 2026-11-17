@@ -35,12 +35,16 @@ func _init() -> void:
 		caixa.add_child(icone)
 		caixa.move_child(icone, 0)
 	pilula_moedas.custom_minimum_size = Vector2(150, 52)
-	add_child(pilula_moedas)
+	# Faixas laterais de mesmo peso (EXPAND_FILL) mantêm a pílula do nível no centro exato.
+	var faixa_esq := _faixa(BoxContainer.ALIGNMENT_BEGIN)
+	faixa_esq.add_child(pilula_moedas)
+	add_child(faixa_esq)
 
 	pilula_nivel = PanelContainer.new()
 	pilula_nivel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pilula_nivel.add_theme_stylebox_override("panel", Tema.estilo_pilula(T.ROXO, T.OURO))
-	pilula_nivel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	pilula_nivel.custom_minimum_size = Vector2(220, 0)
+	pilula_nivel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	label_nivel = Label.new()
 	label_nivel.text = "Nível 1"
 	label_nivel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -58,7 +62,17 @@ func _init() -> void:
 	botao_config.add_theme_stylebox_override("hover", _circulo(T.ROXO.lightened(0.12)))
 	botao_config.add_theme_stylebox_override("pressed", _circulo(T.ROXO.darkened(0.08)))
 	botao_config.pressed.connect(func() -> void: configuracoes_pedidas.emit())
-	add_child(botao_config)
+	var faixa_dir := _faixa(BoxContainer.ALIGNMENT_END)
+	faixa_dir.add_child(botao_config)
+	add_child(faixa_dir)
+
+func _faixa(alinhamento: BoxContainer.AlignmentMode) -> HBoxContainer:
+	var f := HBoxContainer.new()
+	f.alignment = alinhamento
+	f.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	f.size_flags_stretch_ratio = 1.0
+	f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return f
 
 func _circulo(cor: Color) -> StyleBoxFlat:
 	var e := Tema.estilo_botao(cor)
