@@ -74,7 +74,7 @@ Você é o \*\*Gerente Central de Projeto, Arquiteto de Software e Diretor de Ar
 
 \## 4. Qualidade, Testes Headless e Controle de Versão
 
-- **Testes Obrigatórios:** Toda alteração em `core/` ou `visual/` deve passar nos testes automatizados em modo headless do Godot (`core/tests/` e `visual/tests/test_main_scene.gd`) antes de qualquer commit. O executável padrão do Godot para testes headless neste ambiente Windows é `C:\Users\betha\OneDrive\Documents\Godot_v4.7.2-stable_win64_console.exe`.
+- **Testes Obrigatórios:** Toda alteração em `core/` ou `visual/` deve passar nos testes automatizados em modo headless do Godot (`core/tests/` e `visual/tests/test_main_scene.gd`) antes de qualquer commit. O executável padrão do Godot para testes headless neste ambiente Windows é `C:\Users\betha\OneDrive\Documents\Godot_v4.7.2-stable_win64_console.exe`. O executável do Blender registrado para geração de assets 3D é `C:\Program Files\Blender Foundation\Blender 5.3\blender.exe`.
 
 \- \*\*Git \& GitHub:\*\*
 
