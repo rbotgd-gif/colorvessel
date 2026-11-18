@@ -2,3 +2,6 @@
 .import/
 *.tmp
 docs/referencias/*.import
+
+# Configuracao local de ferramentas de IA
+.gemini/
